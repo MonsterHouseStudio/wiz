@@ -1,0 +1,20 @@
+# Dropwizard 는 이 파일 하나로 애플리케이션 설정과 서버 설정을 함께 받습니다.
+# Spring Boot 의 application.yml 과 달리, 최상위 키가 Configuration 클래스의
+# 필드와 1:1 로 대응합니다. 없는 키를 쓰면 뜨지 않고 부팅 자체가 실패합니다.
+
+serviceName: booking-slot
+
+server:
+  applicationConnectors:
+    - type: http
+      port: 8080
+  # 관리 포트. 헬스체크와 메트릭이 여기에 붙습니다.
+  # Spring Boot 의 Actuator 가 별도 포트 없이 같은 포트를 쓰는 것과 다릅니다.
+  adminConnectors:
+    - type: http
+      port: 8081
+
+logging:
+  level: INFO
+  loggers:
+    com.monsterhouse.slot: DEBUG

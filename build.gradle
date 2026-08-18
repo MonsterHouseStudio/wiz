@@ -1,0 +1,61 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.monsterhouse'
+version = '0.1.0'
+
+java {
+    toolchain {
+        // Dropwizard 5 는 Java 17 이상을 요구합니다. 원본 Spring Boot 구현과 같은 21 로 맞췄습니다.
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// javac 는 기본으로 OS 인코딩을 씁니다. 한국어 Windows 에서는 cp949 라
+// UTF-8 로 저장된 주석이 깨지고 컴파일이 실패합니다. 빌드가 개발자 PC 의
+// 로캘에 따라 달라지지 않도록 못박습니다.
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(Test).configureEach {
+    systemProperty 'file.encoding', 'UTF-8'
+}
+
+dependencies {
+    // 버전을 한 곳에서만 정합니다.
+    //   guicey-bom 8.0.2
+    //     -> io.dropwizard:dropwizard-dependencies:5.0.1  (서드파티 버전)
+    //          -> 부모 io.dropwizard:dropwizard-bom:5.0.1 (dropwizard-* 모듈 버전)
+    //     -> com.google.inject:guice-bom:7.0.0
+    //
+    // 그래서 아래 의존성에는 버전을 적지 않습니다. Dropwizard 최신 패치는 5.0.2 이지만
+    // guicey 8.0.2 가 실제로 검증한 조합은 5.0.1 이라 BOM 이 정하는 대로 둡니다.
+    implementation platform('ru.vyarus.guicey:guicey-bom:8.0.2')
+
+    implementation 'io.dropwizard:dropwizard-core'
+    implementation 'ru.vyarus:dropwizard-guicey'
+
+    testImplementation platform('ru.vyarus.guicey:guicey-bom:8.0.2')
+    testImplementation 'io.dropwizard:dropwizard-testing'
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.assertj:assertj-core'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'com.monsterhouse.slot.BookingApplication'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+}
