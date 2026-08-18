@@ -55,6 +55,25 @@ class BookingConflictIT {
     }
 
     @Test
+    void 끝이_시작보다_앞이면_422() {
+        try (Response response = post(
+                Map.of("date", "2026-09-04", "startTime", "16:00", "endTime", "16:00"))) {
+            assertThat(response.getStatus()).isEqualTo(422);
+            assertThat(response.readEntity(String.class)).contains("endTime must be after startTime");
+        }
+    }
+
+    @Test
+    void 빈_값은_NotNull_만_보고한다() {
+        // date 를 빠뜨린 요청에 시간 순서 오류까지 함께 붙어 나가면 안 됩니다.
+        try (Response response = post(Map.of("startTime", "09:00", "endTime", "10:00"))) {
+            assertThat(response.getStatus()).isEqualTo(422);
+            String body = response.readEntity(String.class);
+            assertThat(body).doesNotContain("endTime must be after startTime");
+        }
+    }
+
+    @Test
     void 날짜는_ISO_문자열로_나간다() {
         // WRITE_DATES_AS_TIMESTAMPS 를 끄지 않으면 [2026,9,3] 으로 나갑니다.
         // 요청 파싱은 멀쩡해서 통과하고 응답만 조용히 틀리는 종류라 테스트로 고정합니다.

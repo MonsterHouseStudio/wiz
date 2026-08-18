@@ -38,7 +38,7 @@ public class BookingResource {
     public Response create(@Valid CreateBookingRequest request) {
         // 겹치면 SlotConflictException 이 올라가고 SlotConflictExceptionMapper 가 409 로 바꿉니다.
         Booking booking = bookingService.book(
-                request.getDate(), request.getStartTime(), request.getEndTime());
+                request.date(), request.startTime(), request.endTime());
 
         return Response.created(java.net.URI.create("/bookings/" + booking.id()))
                 .entity(BookingResponse.from(booking))
