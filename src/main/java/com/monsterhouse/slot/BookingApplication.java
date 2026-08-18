@@ -1,5 +1,6 @@
 package com.monsterhouse.slot;
 
+import com.fasterxml.jackson.databind.SerializationFeature;
 import io.dropwizard.core.Application;
 import io.dropwizard.core.setup.Bootstrap;
 import io.dropwizard.core.setup.Environment;
@@ -40,6 +41,13 @@ public class BookingApplication extends Application<BookingConfiguration> {
 
     @Override
     public void run(BookingConfiguration configuration, Environment environment) {
+        // Dropwizard 의 ObjectMapper 는 JavaTimeModule 을 등록해 주지만
+        // WRITE_DATES_AS_TIMESTAMPS 는 켜둔 채로 둡니다. 그대로 두면 LocalDate 가
+        // "2026-09-01" 이 아니라 [2026,9,1] 로 나갑니다. 읽기는 멀쩡해서 요청은 통과하고
+        // 응답만 조용히 틀립니다. Spring Boot 는 이걸 기본으로 꺼주지만 여기서는 직접 끕니다.
+        environment.getObjectMapper()
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
         // 예외 매퍼는 주입받을 것이 없어 Guice 를 거치지 않고 Jersey 에 직접 등록합니다.
         environment.jersey().register(new SlotConflictExceptionMapper());
     }

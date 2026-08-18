@@ -1,0 +1,14 @@
+# 테스트는 포트 0 으로 띄웁니다. 고정 포트를 쓰면 개발자 PC 에서 8080 이
+# 이미 물려 있을 때 테스트가 실패합니다. 실제 포트는 확장이 알려줍니다.
+serviceName: booking-slot-test
+
+server:
+  applicationConnectors:
+    - type: http
+      port: 0
+  adminConnectors:
+    - type: http
+      port: 0
+
+logging:
+  level: WARN

@@ -1,10 +1,10 @@
 package com.monsterhouse.slot.health;
 
-import com.codahale.metrics.health.HealthCheck;
 import com.monsterhouse.slot.db.BookingRepository;
 
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
+import ru.vyarus.dropwizard.guice.module.installer.feature.health.NamedHealthCheck;
 
 /**
  * {@code GET http://localhost:8081/healthcheck} 에서 확인합니다.
@@ -15,15 +15,25 @@ import jakarta.inject.Singleton;
  *
  * <p>지금은 저장소가 응답하는지만 봅니다. 2단계에서 MySQL 구현체가 들어오면
  * 이 자리가 커넥션 검사로 바뀝니다.
+ *
+ * <p>{@link NamedHealthCheck} 를 상속하는 이유: Dropwizard 의 헬스체크 레지스트리는
+ * 이름을 키로 쓰는데 순수 {@code HealthCheck} 에는 이름이 없습니다. guicey 는
+ * 클래스명에서 이름을 지어내지 않고 등록을 거부합니다 —
+ * "No installer found for extension" 으로 부팅이 실패합니다.
  */
 @Singleton
-public class BookingHealthCheck extends HealthCheck {
+public class BookingHealthCheck extends NamedHealthCheck {
 
     private final BookingRepository repository;
 
     @Inject
     public BookingHealthCheck(BookingRepository repository) {
         this.repository = repository;
+    }
+
+    @Override
+    public String getName() {
+        return "bookings";
     }
 
     @Override
