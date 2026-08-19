@@ -41,11 +41,26 @@ dependencies {
     implementation 'io.dropwizard:dropwizard-core'
     implementation 'ru.vyarus:dropwizard-guicey'
 
+    // 2단계. guicey-jdbi3 는 dropwizard-jdbi3 위에 @InTransaction AOP 를 얹어
+    // Guice 빈에서 트랜잭션 경계를 선언할 수 있게 해줍니다.
+    implementation 'ru.vyarus.guicey:guicey-jdbi3'
+    implementation 'io.dropwizard:dropwizard-migrations'
+
+    // BOM 관리 밖이라 버전을 직접 적습니다.
+    // 26.7.0 은 MySQL 이 캘린더 버저닝으로 바꾼 뒤의 최신 GA 입니다(8.x -> 9.x -> 26.x).
+    runtimeOnly 'com.mysql:mysql-connector-j:26.7.0'
+
     testImplementation platform('ru.vyarus.guicey:guicey-bom:8.0.2')
     testImplementation 'io.dropwizard:dropwizard-testing'
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.assertj:assertj-core'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // H2 를 쓰지 않는 이유: 이 저장소의 주장이 동시성이라
+    // 갭 락과 트랜잭션 격리가 실제로 재현되지 않으면 테스트가 무의미합니다.
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.21.4')
+    testImplementation 'org.testcontainers:mysql'
+    testImplementation 'org.testcontainers:junit-jupiter'
 }
 
 application {
