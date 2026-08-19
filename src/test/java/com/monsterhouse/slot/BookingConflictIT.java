@@ -1,8 +1,10 @@
 package com.monsterhouse.slot;
 
+import io.dropwizard.testing.ConfigOverride;
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit5.DropwizardAppExtension;
 import io.dropwizard.testing.junit5.DropwizardExtensionsSupport;
+import org.testcontainers.containers.MySQLContainer;
 
 import jakarta.ws.rs.client.Client;
 import jakarta.ws.rs.client.Entity;
@@ -24,9 +26,48 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ExtendWith(DropwizardExtensionsSupport.class)
 class BookingConflictIT {
 
+    /**
+     * 앱이 실제로 MySQL 을 물고 뜨는지까지 봅니다.
+     *
+     * <p>DropwizardAppExtension 은 JUnit 확장보다 먼저 컨테이너가 떠 있어야 하므로
+     * {@code @Container} 대신 static 초기화로 직접 시작합니다.
+     * 스키마는 운영과 같은 {@code migrations.sql} 을 Liquibase 로 적용합니다 —
+     * 테스트에서만 CREATE TABLE 을 따로 쓰면 운영 스키마와 어긋나도 모릅니다.
+     */
+    private static final MySQLContainer<?> MYSQL =
+            new MySQLContainer<>("mysql:8.0.46")
+                    .withDatabaseName("booking")
+                    .withUsername("booking")
+                    .withPassword("booking");
+
+    static {
+        MYSQL.start();
+
+        // 스키마를 먼저 올립니다. APP 이 만들어지기 전에 끝나야 합니다.
+        //
+        // 여기서 APP.getApplication() 을 재사용하면 안 됩니다. guicey 는 Application
+        // 인스턴스마다 SharedConfigurationState 를 하나만 허용해서,
+        // 이미 초기화된 인스턴스로 명령을 또 돌리면
+        // "Shared state already associated with application" 으로 죽습니다.
+        // 명령 전용으로 새 인스턴스를 씁니다.
+        System.setProperty("dw.database.url", MYSQL.getJdbcUrl());
+        System.setProperty("dw.database.user", MYSQL.getUsername());
+        System.setProperty("dw.database.password", MYSQL.getPassword());
+        try {
+            new BookingApplication().run(
+                    "db", "migrate", ResourceHelpers.resourceFilePath("test-config.yml"));
+        } catch (Exception e) {
+            throw new IllegalStateException("마이그레이션 실패", e);
+        }
+    }
+
     private static final DropwizardAppExtension<BookingConfiguration> APP =
             new DropwizardAppExtension<>(
-                    BookingApplication.class, ResourceHelpers.resourceFilePath("test-config.yml"));
+                    BookingApplication.class,
+                    ResourceHelpers.resourceFilePath("test-config.yml"),
+                    ConfigOverride.config("database.url", MYSQL::getJdbcUrl),
+                    ConfigOverride.config("database.user", MYSQL::getUsername),
+                    ConfigOverride.config("database.password", MYSQL::getPassword));
 
     private Response post(Map<String, String> body) {
         Client client = APP.client();

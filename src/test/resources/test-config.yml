@@ -12,3 +12,14 @@ server:
 
 logging:
   level: WARN
+
+database:
+  driverClass: com.mysql.cj.jdbc.Driver
+  user: booking
+  password: booking
+  url: jdbc:mysql://localhost:3306/booking
+  maxWaitForConnection: 5s
+  validationQuery: "SELECT 1"
+  minSize: 4
+  maxSize: 16
+  checkConnectionWhileIdle: false
