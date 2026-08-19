@@ -14,7 +14,7 @@
 
 결론부터 적으면, 방어의 구조는 그대로 옮겨졌고 바뀐 것은 그 구조를 **어디에 적어야 하는가**였습니다.
 Spring 에서는 애노테이션과 자동 설정이 대신 적어주던 것을 Dropwizard 에서는 직접 적습니다.
-그 과정에서 원본을 쓸 때는 몰랐던 것 두 개를 알게 됐고, 4절에 적었습니다.
+그리고 프레임워크와 무관하게 남는 문제가 무엇인지도 갈라졌습니다. 4절에 적었습니다.
 
 ---
 
@@ -39,8 +39,8 @@ Spring 에서는 애노테이션과 자동 설정이 대신 적어주던 것을 
 
 ### 이 저장소에서의 대응
 
-1단계는 인메모리 저장소 하나만 둡니다. 그래서 1층(DB 행 잠금)과 3층(UNIQUE 제약)에
-해당하는 DB 기능이 없습니다. 그래도 **경합 구간을 없앤다는 요건은 같으므로**,
+구현체는 둘입니다. 인메모리 쪽에는 1층(DB 행 잠금)과 3층(UNIQUE 제약)에 해당하는
+DB 기능이 없습니다. 그래도 **경합 구간을 없앤다는 요건은 같으므로**,
 저장소 인터페이스에 원자적 연산 하나만 둡니다.
 
 ```java
@@ -57,7 +57,12 @@ Optional<Booking> insertIfNoOverlap(LocalDate date, LocalTime start, LocalTime e
 | 구현체 | 계약을 지키는 방법 |
 |---|---|
 | `InMemoryBookingRepository` | 날짜별 락 객체 + `synchronized` |
-| (2단계) `JdbiBookingRepository` | day lock `FOR UPDATE` → 겹침 쿼리 → `slot_key` UNIQUE |
+| `JdbiBookingRepository` | day lock `FOR UPDATE` → 겹침 쿼리 → `slot_key` UNIQUE |
+
+두 구현체는 `BookingRepositoryContract` 라는 **같은 테스트 클래스**를 상속해 통과합니다.
+동시 20건 중 정확히 1건만 성공하는 테스트가 그 안에 있습니다.
+구현체를 바꿀 때 실제로 바뀐 것은 `BookingModule` 의 바인딩 한 줄이고,
+`BookingService` 와 `BookingResource` 는 손대지 않았습니다.
 
 인메모리에서도 전체를 하나의 락으로 묶지 않고 **날짜 단위로** 잠급니다.
 원본이 날짜 단위로 잠근 것과 같은 이유입니다 — 다른 날짜 요청까지 줄 세울 이유가 없습니다.
@@ -74,10 +79,12 @@ Optional<Booking> insertIfNoOverlap(LocalDate date, LocalTime start, LocalTime e
 | `@Service` + 컴포넌트 스캔 | Guice Module 명시적 바인딩 | `BookingModule` |
 | `application.yml` + `@ConfigurationProperties` | Configuration 클래스 + YAML | `BookingConfiguration`, `config.yml` |
 | `@RestControllerAdvice` | `ExceptionMapper` + Jersey 등록 | `error/SlotConflictExceptionMapper` |
-| Spring Data JPA | (2단계) JDBI3 DAO, SQL 직접 | — |
-| `@Transactional` | (2단계) JDBI `@Transaction` | — |
+| Spring Data JPA | JDBI3, SQL 직접 | `db/JdbiBookingRepository` |
+| `@Transactional` | `Jdbi#inTransaction` / guicey `@InTransaction` | `db/JdbiBookingRepository` |
 | Actuator | admin 포트(8081) + HealthCheck + Metrics | `health/BookingHealthCheck` |
 | 자동 설정 | Bundle 명시적 등록 | `BookingApplication#initialize` |
+| `spring.datasource.*` | `DataSourceFactory` + `JdbiBundle` | `BookingConfiguration#getDatabase` |
+| Flyway 자동 실행 | `MigrationsBundle` + `db migrate` 명령 | `migrations.sql` |
 
 Bean Validation(`@NotNull`, `@Valid`)은 양쪽이 같은 Jakarta 규격이라 그대로 옮겨집니다.
 검증 실패 시 Dropwizard 는 422 를, Spring 은 400 을 냅니다.
@@ -87,7 +94,7 @@ Bean Validation(`@NotNull`, `@Valid`)은 양쪽이 같은 Jakarta 규격이라 �
 ## 4. 자동에서 명시로 바뀌면서 무엇이 보이게 됐는가
 
 옮기기 전에 예상한 것은 "코드가 좀 늘겠지" 였습니다. 실제로 겪은 것은 조금 달랐습니다.
-**Spring 이 나 대신 내리고 있던 결정이 무엇인지가 보였습니다.** 세 가지를 겪었습니다.
+**Spring 이 나 대신 내리고 있던 결정이 무엇인지가 보였습니다.** 네 가지를 겪었습니다.
 
 **하나. 응답이 조용히 틀렸습니다.** `POST /bookings` 가 201 을 주는데 본문이
 `{"date":[2026,9,1]}` 였습니다. Dropwizard 의 ObjectMapper 는 `JavaTimeModule` 은 등록해 주지만
@@ -111,8 +118,29 @@ Spring 의 Actuator 는 빈 이름에서 지표 이름을 만들어 줍니다 �
 그래서 통합 테스트를 서비스 직접 호출이 아니라 **실제로 Jetty 를 띄워** 작성했습니다.
 서비스만 부르는 테스트는 이 실수를 절대 못 잡습니다.
 
-세 가지 모두 "Dropwizard 가 불편하다" 는 이야기가 아닙니다.
-**세 가지 모두 Spring 을 쓸 때도 존재하던 결정이고, 다만 제가 내리지 않았을 뿐입니다.**
+**넷. 같은 데드락이 다시 났습니다.** MySQL 구현체를 붙이고 계약 테스트의 동시 20건을 돌리자
+`Deadlock found when trying to get lock` 이 터졌습니다. 원본에서 이미 겪고 해결한 것과
+같은 데드락입니다.
+
+원인은 `INSERT IGNORE` 로 날짜 락 행을 만든 뒤 **같은 트랜잭션 안에서** 바로
+`FOR UPDATE` 를 건 것이었습니다. `INSERT IGNORE` 는 중복 키를 만나면 그 행에 공유(S) 락을
+잡는데, 20개 트랜잭션이 모두 S 락을 쥔 채 배타(X) 락으로 승격하려 하면서 서로를 기다립니다.
+행이 아예 없을 때는 더 나쁩니다 — InnoDB 는 없는 행에 `FOR UPDATE` 를 걸면 갭 락을 잡고,
+갭 락끼리는 호환되지만 각자 INSERT 를 시도하는 순간 insert-intention 락이 남의 갭 락과 충돌합니다.
+
+해법도 원본과 같습니다. 락 행 생성을 **별도 트랜잭션으로 분리해 먼저 커밋**하고,
+예약 트랜잭션은 이미 존재하는 행에 순수 행 락만 겁니다.
+다만 옮기는 쪽이 조금 더 단순했습니다. Spring 에서는 `@Transactional(REQUIRES_NEW)` 가
+프록시를 타야 해서 **별도 빈으로 분리**해야 했습니다 — 같은 클래스 안에서 부르면 조용히 무시됩니다.
+JDBI 에는 프록시가 없어 핸들을 하나 더 여는 것으로 끝났습니다. 같은 해법, 함정 하나가 적습니다.
+
+이게 이 저장소에서 가장 중요한 결과라고 생각합니다.
+**데드락은 프레임워크가 만든 게 아니라 InnoDB 의 잠금 동작이 만든 것이었습니다.**
+Spring 을 걷어내도 그대로 남았고, 해법도 그대로 옮겨졌습니다.
+
+네 가지 모두 "Dropwizard 가 불편하다" 는 이야기가 아닙니다.
+**앞의 셋은 Spring 을 쓸 때도 존재하던 결정이고, 다만 제가 내리지 않았을 뿐입니다.
+넷째는 애초에 프레임워크의 문제가 아니었습니다.**
 겹침 판정과 3층 방어의 구조 자체는 두 프레임워크에서 똑같았습니다 — 옮기면서 바뀐 줄이 없습니다.
 바뀐 것은 그 구조를 지탱하는 배선을 누가 적느냐였습니다.
 
@@ -124,12 +152,28 @@ Spring 의 Actuator 는 빈 이름에서 지표 이름을 만들어 줍니다 �
 
 ## 5. 실행 방법
 
+### 테스트
+
 ```bash
 ./gradlew test
 ```
 
+Docker 가 필요합니다. MySQL 8.0 을 Testcontainers 로 띄웁니다.
+H2 를 쓰지 않는 이유는 이 저장소가 확인하려는 것이 `SELECT ... FOR UPDATE` 의 직렬화와
+UNIQUE 제약의 동작이기 때문입니다. 임베디드 DB 에서는 InnoDB 의 잠금 동작이 재현되지 않아
+통과해도 아무것도 증명하지 못합니다.
+
+### 실행
+
+MySQL 이 필요합니다. `config.yml` 의 `database` 블록을 환경에 맞게 고친 뒤,
+
 ```bash
 ./gradlew installDist
+
+# 스키마 생성. Spring Boot 의 Flyway 와 달리 부팅 시 자동으로 돌지 않습니다.
+java -cp "build/install/booking-slot-dropwizard/lib/*" \
+  com.monsterhouse.slot.BookingApplication db migrate config.yml
+
 java -cp "build/install/booking-slot-dropwizard/lib/*" \
   com.monsterhouse.slot.BookingApplication server config.yml
 ```
@@ -171,20 +215,19 @@ curl -X POST http://localhost:8080/bookings -H 'Content-Type: application/json' 
 
 ### 스택
 
-Java 21 · Dropwizard 5.0.1 (Jetty 12) · dropwizard-guicey 8.0.2 · Guice 7 · Gradle · JUnit 5
+Java 21 · Dropwizard 5.0.1 (Jetty 12) · dropwizard-guicey 8.0.2 · Guice 7 · JDBI3 · MySQL 8.0 · Gradle · JUnit 5 · Testcontainers
 
 버전은 `ru.vyarus.guicey:guicey-bom:8.0.2` 한 곳에서만 정합니다.
 `build.gradle` 의 의존성에 버전이 적혀 있지 않은 것은 그 때문입니다.
 
 ---
 
-## 6. 2단계 예정
+## 6. 다음
 
-- `JdbiBookingRepository` — JDBI3 + MySQL 8. `BookingModule` 의 바인딩 한 줄만 바뀝니다
-- day lock `FOR UPDATE` → 겹침 쿼리 → `slot_key` UNIQUE 3층을 `insertIfNoOverlap` 안에서 구현
-- `@Transaction` 으로 트랜잭션 경계 설정
-- 동시 요청 부하 테스트 — 같은 시간대에 N개를 동시에 던져 1건만 성공하는지.
-  인메모리와 MySQL 구현체가 **같은 테스트를 통과하는지**가 이 저장소의 주장이 성립하는지의 판단 기준입니다
+- 예약 취소 — `slot_key` 를 NULL 로 비워 같은 슬롯을 다시 팔 수 있게. 3층 설계의 나머지 절반입니다
+- 부하 실험 — 동시 20건은 정확성 확인이고, 처리량과 락 대기 시간은 아직 측정하지 않았습니다
+- guicey `@InTransaction` AOP — 지금은 `Jdbi#inTransaction` 을 직접 씁니다.
+  트랜잭션 경계가 저장소 안에 하나뿐이라 AOP 를 쓸 이유가 아직 없습니다
 
-1단계 범위 밖으로 둔 것: 인증, 회원가입, 페이지네이션, 관리자 기능, 예약 도메인 확장.
+범위 밖으로 둔 것: 인증, 회원가입, 페이지네이션, 관리자 기능, 예약 도메인 확장.
 겹침 판정 하나만 다룹니다.
