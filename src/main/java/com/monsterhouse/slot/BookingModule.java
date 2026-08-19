@@ -4,7 +4,7 @@ import com.google.inject.AbstractModule;
 import com.google.inject.Scopes;
 import com.monsterhouse.slot.core.BookingService;
 import com.monsterhouse.slot.db.BookingRepository;
-import com.monsterhouse.slot.db.InMemoryBookingRepository;
+import com.monsterhouse.slot.db.JdbiBookingRepository;
 
 /**
  * 배선.
@@ -21,8 +21,14 @@ public class BookingModule extends AbstractModule {
 
     @Override
     protected void configure() {
-        // 갈아끼우는 지점. 2단계에서 JdbiBookingRepository 로 바뀝니다.
-        bind(BookingRepository.class).to(InMemoryBookingRepository.class).in(Scopes.SINGLETON);
+        // 갈아끼우는 지점.
+        //
+        // 1단계에서 InMemoryBookingRepository 였던 것이 이 한 줄만 바뀌었습니다.
+        // BookingService 도 BookingResource 도 손대지 않았습니다 —
+        // "겹치지 않으면 넣는다" 가 저장소의 단일 원자 연산이라
+        // 두 구현체가 같은 계약 테스트를 통과하기 때문입니다
+        // (BookingRepositoryContract 참고).
+        bind(BookingRepository.class).to(JdbiBookingRepository.class).in(Scopes.SINGLETON);
 
         bind(BookingService.class).in(Scopes.SINGLETON);
     }

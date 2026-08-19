@@ -18,3 +18,17 @@ logging:
   level: INFO
   loggers:
     com.monsterhouse.slot: DEBUG
+
+# Spring Boot 의 spring.datasource.* 에 대응합니다.
+database:
+  driverClass: com.mysql.cj.jdbc.Driver
+  user: booking
+  password: booking
+  url: jdbc:mysql://localhost:3306/booking?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+  properties:
+    charSet: UTF-8
+  maxWaitForConnection: 1s
+  validationQuery: "SELECT 1"
+  minSize: 8
+  maxSize: 32
+  checkConnectionWhileIdle: false

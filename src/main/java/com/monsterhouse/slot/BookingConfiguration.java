@@ -2,7 +2,10 @@ package com.monsterhouse.slot;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.dropwizard.core.Configuration;
+import io.dropwizard.db.DataSourceFactory;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 
 /**
  * config.yml 이 이 클래스로 바인딩됩니다.
@@ -16,6 +19,26 @@ public class BookingConfiguration extends Configuration {
 
     @NotEmpty
     private String serviceName;
+
+    /**
+     * 커넥션 풀 설정.
+     *
+     * <p>Spring Boot 는 {@code spring.datasource.*} 를 읽어 HikariCP 를 알아서 만들어 줍니다.
+     * 여기서는 이 필드를 선언하고 {@code JdbiBundle} 에 넘기는 것까지가 제 일입니다.
+     */
+    @Valid
+    @NotNull
+    private DataSourceFactory database = new DataSourceFactory();
+
+    @JsonProperty("database")
+    public DataSourceFactory getDatabase() {
+        return database;
+    }
+
+    @JsonProperty("database")
+    public void setDatabase(DataSourceFactory database) {
+        this.database = database;
+    }
 
     @JsonProperty
     public String getServiceName() {
